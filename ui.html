@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 20px;
+      background: #f9fafb;
+      margin: 0;
+    }
+    
+    .header {
+      background: #440DC3;
+      color: white;
+      padding: 15px;
+      margin: -20px -20px 20px -20px;
+      text-align: center;
+    }
+    
+    .header h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    
+    .upload-area {
+      border: 2px dashed #440DC3;
+      border-radius: 8px;
+      padding: 30px;
+      text-align: center;
+      background: white;
+      margin-bottom: 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .upload-area:hover {
+      background: #f3f4f6;
+      border-color: #5515d4;
+    }
+    
+    .upload-area.dragover {
+      background: #e8e0ff;
+      border-color: #5515d4;
+    }
+    
+    input[type="file"] {
+      display: none;
+    }
+    
+    .file-info {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #e5e7eb;
+      display: none;
+    }
+    
+    .file-info.show {
+      display: block;
+    }
+    
+    .file-name {
+      font-weight: bold;
+      color: #440DC3;
+      margin-bottom: 10px;
+    }
+    
+    .preview-data {
+      font-size: 12px;
+      color: #6b7280;
+      background: #f9fafb;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-preview {
+      background: #6b7280;
+      color: white;
+    }
+    
+    .btn-preview:hover {
+      background: #4b5563;
+    }
+    
+    .btn-generate {
+      background: #440DC3;
+      color: white;
+    }
+    
+    .btn-generate:hover {
+      background: #5515d4;
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .checkbox-group {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #e5e7eb;
+      display: none;
+    }
+    
+    .checkbox-group.show {
+      display: block;
+    }
+    
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    
+    .status {
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .status.show {
+      display: block;
+    }
+    
+    .status.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #2e7d32;
+    }
+    
+    .status.error {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #c62828;
+    }
+    
+    .status.info {
+      background: #e3f2fd;
+      color: #1565c0;
+      border: 1px solid #1565c0;
+    }
+    
+    .loading {
+      display: none;
+      text-align: center;
+      margin: 20px 0;
+    }
+    
+    .loading.show {
+      display: block;
+    }
+    
+    .spinner {
+      border: 3px solid #f3f4f6;
+      border-top: 3px solid #440DC3;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>Maya Intake Parser</h2>
+  </div>
+  
+  <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+    <div>
+      📄 Click to upload or drag & drop
+      <br><br>
+      <small>Accept: .json files</small>
+    </div>
+  </div>
+  
+  <input type="file" id="fileInput" accept=".json" onchange="handleFileSelect(event)">
+  
+  <div class="file-info" id="fileInfo">
+    <div class="file-name" id="fileName"></div>
+    <div class="preview-data" id="previewData"></div>
+  </div>
+  
+  <div class="checkbox-group" id="versionCheckbox">
+    <label class="checkbox-label">
+      <input type="checkbox" id="forceNewVersion">
+      <span>Force new version (even if sheet doesn't exist)</span>
+    </label>
+  </div>
+  
+  <div class="actions">
+    <button class="btn-preview" id="btnPreview" onclick="previewData()" disabled>
+      Preview JSON → Table
+    </button>
+    <button class="btn-generate" id="btnGenerate" onclick="generateSheet()" disabled>
+      Generate Intake Sheet
+    </button>
+  </div>
+  
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Processing...</p>
+  </div>
+  
+  <div class="status" id="status"></div>
+  
+  <script>
+    let fileContent = null;
+    
+    // Handle drag and drop
+    const uploadArea = document.getElementById('uploadArea');
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        processFile(files[0]);
+      }
+    });
+    
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        processFile(file);
+      }
+    }
+    
+    function processFile(file) {
+      if (!file.name.endsWith('.json')) {
+        showStatus('Please upload a .json file', 'error');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        fileContent = e.target.result;
+        
+        // Show file info
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileInfo').classList.add('show');
+        document.getElementById('versionCheckbox').classList.add('show');
+        
+        // Enable buttons
+        document.getElementById('btnPreview').disabled = false;
+        document.getElementById('btnGenerate').disabled = false;
+        
+        // Try to parse and show basic info
+        try {
+          const json = JSON.parse(fileContent);
+          const info = `Template: ${json.template_name || 'Unknown'}`;
+          document.getElementById('previewData').textContent = info;
+        } catch (error) {
+          document.getElementById('previewData').textContent = 'Error parsing JSON';
+        }
+      };
+      reader.readAsText(file);
+    }
+    
+    function previewData() {
+      if (!fileContent) return;
+      
+      showLoading(true);
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          showLoading(false);
+          if (result.success) {
+            let message = `✓ Template: ${result.templateName}\n`;
+            message += `✓ Questions: ${result.questionCount}\n`;
+            message += `✓ Sections: ${result.sectionCount}`;
+            
+            if (result.hasDuplicates) {
+              message += `\n⚠️ Duplicate IDs: ${result.duplicates.join(', ')}`;
+              showStatus(message, 'error');
+            } else {
+              showStatus(message, 'info');
+            }
+          } else {
+            showStatus(`Error: ${result.error}`, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showStatus(`Error: ${error}`, 'error');
+        })
+        .previewJSON(fileContent);
+    }
+    
+    function generateSheet() {
+      if (!fileContent) return;
+      
+      const forceNew = document.getElementById('forceNewVersion').checked;
+      
+      if (confirm('Generate intake sheet from this JSON?')) {
+        showLoading(true);
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            showLoading(false);
+            if (result.success) {
+              showStatus(`✓ ${result.message}`, 'success');
+              // Reset after success
+              setTimeout(() => {
+                resetForm();
+              }, 3000);
+            } else {
+              showStatus(`Error: ${result.error}`, 'error');
+            }
+          })
+          .withFailureHandler(function(error) {
+            showLoading(false);
+            showStatus(`Error: ${error}`, 'error');
+          })
+          .processIntakeJSON(fileContent, forceNew);
+      }
+    }
+    
+    function showStatus(message, type) {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.className = 'status show ' + type;
+    }
+    
+    function showLoading(show) {
+      document.getElementById('loading').className = show ? 'loading show' : 'loading';
+      document.getElementById('btnPreview').disabled = show;
+      document.getElementById('btnGenerate').disabled = show;
+    }
+    
+    function resetForm() {
+      fileContent = null;
+      document.getElementById('fileInput').value = '';
+      document.getElementById('fileInfo').classList.remove('show');
+      document.getElementById('versionCheckbox').classList.remove('show');
+      document.getElementById('status').classList.remove('show');
+      document.getElementById('btnPreview').disabled = true;
+      document.getElementById('btnGenerate').disabled = true;
+      document.getElementById('forceNewVersion').checked = false;
+    }
+  </script>
+</body>
+</html>
